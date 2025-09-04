@@ -83,7 +83,7 @@ class Lexer:
 
 # Teste básico
 if __name__ == "__main__":
-    arquivo_entrada = "entrada.ec1"
+    arquivo_entrada = "tests/teste1.ec2"
 
     with open(arquivo_entrada, "r") as f:
         conteudo = f.read()
