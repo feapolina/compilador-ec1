@@ -43,7 +43,8 @@ class Parser:
                     raise SyntaxError("Fim inesperado dos tokens")
                 
                 token = tokens[index]
-                
+
+                # Parênteses
                 if token == '(':
                     index += 1
                     expr, index = parse_expr(index)
@@ -51,8 +52,13 @@ class Parser:
                         raise SyntaxError(f"Esperado ')', mas achou {tokens[index] if index < len(tokens) else 'EOF'}")
                     return expr, index + 1
                 
+                #Variável
+                elif token.isidentifier():
+                    return Var(token), index + 1
+                
+                # Número
                 elif token.isdigit() or (token[0] == '-' and token[1:].isdigit() and (index == 0 or tokens[index-1] in ('(', '+', '-', '*', '/'))):
-                    # Números (incluindo números negativos quando apropriado)
+                    # Números (incluindo números negativos quando a1priado)
                     return Number(int(token)), index + 1
                 
                 else:
@@ -68,6 +74,40 @@ class Parser:
                 left = BinOp(left, op, right)
             
             return left, index
+        
+        def parse_declaracao(index):
+            # <ident> '=' <exp> ';'
+            nome = tokens[index]
+            index += 1
+            if tokens[index] != '=':
+                raise SyntaxError("Esperado '=' em declaração")
+            index += 1
+            expr, index = parse_expr(index)
+            if tokens[index] != ';':
+                raise SyntaxError("Esperado ';' ao final da declaração")
+            index += 1
+            return Declaracao(nome, expr), index
+
+        def parse_resultado(index):
+            # '=' <exp>
+            if tokens[index] != '=':
+                raise SyntaxError("Esperado '=' no início do resultado")
+            index += 1
+            expr, index = parse_expr(index)
+            return expr, index
+            
+        # --- Aqui começa o parse do programa ---
+        index = 0
+        declaracoes = []
+        while index < len(tokens) and tokens[index].isidentifier():
+            decl, index = parse_declaracao(index)
+            declaracoes.append(decl)
+        if index >= len(tokens) or tokens[index] != '=':
+            raise SyntaxError("Esperado '=' para expressão final")
+        expFinal, index = parse_resultado(index)
+        if index != len(tokens):
+            raise SyntaxError("Tokens restantes após o fim do programa")
+        return Programa(declaracoes, expFinal)
         
         try:
             if not tokens:
@@ -89,7 +129,18 @@ class Parser:
         connector = "└── " if last else "├── "
         print(prefix + connector, end="")
 
-        if isinstance(node, Number):
+        
+        if isinstance(node, Programa):
+            print("Programa")
+            for i, decl in enumerate(node.declaracoes):
+                self.print_ast(decl, indent + 4, False)
+            self.print_ast(node.expFinal, indent + 4, True)
+        elif isinstance(node, Declaracao):
+            print(f"Declaracao {node.nome_variavel}")
+            self.print_ast(node.expressao, indent + 4, True)
+        elif isinstance(node, Var):
+            print(f"Var {node.nome_variavel}")
+        elif isinstance(node, Number):
             print(f"{node.value}")
         elif isinstance(node, BinOp):
             print(f"{node.op}")
@@ -105,6 +156,33 @@ class Parser:
     def build_tree_lines(self, node):
         if node is None:
             return [""], 0, 1, 0
+        
+        # Suporte para Programa
+        if isinstance(node, Programa):
+            lines = ["Programa"]
+            children_lines = []
+            for decl in node.declaracoes:
+                decl_lines, _, _, _ = self.build_tree_lines(decl)
+                children_lines += ["    " + l for l in decl_lines]
+            exp_lines, _, _, _ = self.build_tree_lines(node.expressaoFinal)
+            children_lines += ["    " + l for l in exp_lines]
+            lines += children_lines
+            width = max(len(line) for line in lines)
+            return lines, width, len(lines), width // 2
+
+        # Suporte para Declaracao
+        if isinstance(node, Declaracao):
+            lines = [f"Declaracao {node.nomeVariavel}"]
+            expr_lines, _, _, _ = self.build_tree_lines(node.expressao)
+            lines += ["    " + l for l in expr_lines]
+            width = max(len(line) for line in lines)
+            return lines, width, len(lines), width // 2
+
+        # Suporte para Var
+        if isinstance(node, Var):
+            s = f"Var {node.nomeVariavel}"
+            width = len(s)
+            return [s], width, 1, width // 2
             
         if isinstance(node, Number):
             s = str(node.value)
@@ -169,11 +247,12 @@ class Parser:
         except Exception as e:
             print(f"Erro ao imprimir árvore: {e}")
 
+
 def main():
     paser = Parser()
    
     arquivo = None
-    with open("entrada.ec1", "r") as f:
+    with open("tests/teste5.ec1", "r") as f:
         arquivo = f.read()
 
 

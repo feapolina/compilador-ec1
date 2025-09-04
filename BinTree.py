@@ -11,6 +11,21 @@ class BinOp(Node):
         self.op = op
         self.right = right
 
+class Programa:
+    def __init__(self, declaracoes, expressaoFinal):
+        self.declaracoes = declaracoes
+        self.expressaoFinal = expressaoFinal
+
+class Declaracao:
+    def __init__(self, nomeVariavel, expressao):
+        self.nomeVariavel = nomeVariavel
+        self.expressao = expressao
+        
+class Var:
+    def __init__(self, nomeVariavel):
+        self.nomeVariavel = nomeVariavel
+
+
 
 # Exemplo de uso
 # raiz = Node("Raiz")
