@@ -1,6 +1,5 @@
-from os import system
-from BinTree import *
-from atv5 import *
+from .ast_nodes import *
+from .parser import *
 
 class Compiler:
 
@@ -83,7 +82,7 @@ class Compiler:
         self.asmcode[0] += "\n    call imprime_num"
         
         self.asmcode[0] += "\n    call sair"
-        self.asmcode[0] += "\n.include \"runtime.s\""
+        self.asmcode[0] += "\n.include \"../runtime/runtime.s\""
 
         with open("saida.s", "w") as f:
             f.write(self.asmcode[0])
@@ -99,7 +98,7 @@ def main():
         comp.read_file(entrada)
         comp.compile()
 
-        print("Programa complado com Sucesso!")
+        print("Programa compilado com sucesso!")
     except:
         print("Arquivo de Entrada inválido")
 
