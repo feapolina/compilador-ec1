@@ -1,5 +1,5 @@
 from os import system
-from BinTree import * # Não é necessário importar, pois as classes estão definidas neste notebook.
+from BinTree import * 
 from atv4 import *
 
 class Parser:
@@ -11,7 +11,7 @@ class Parser:
         self.tokens = []
         self.tokenlist = []
     
-    def lexic_analyse(self, text=""): # Deve retorna os tokens
+    def lexic_analyse(self, text=""): # Deve retornar os tokens
         self.lexer = Lexer(text)
         self.tokens.clear()
         self.tokenlist.clear()

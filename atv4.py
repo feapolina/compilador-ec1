@@ -29,6 +29,13 @@ class Lexer:
             while self.pos < self.length and self.texto[self.pos].isdigit():
                 self.pos += 1
             return Token("Numero", self.texto[start:self.pos], start)
+        
+        # Identificadores: começam com letra, podem conter números e letras
+        elif c.isalpha():
+            start = self.pos
+            while self.pos < self.length and (self.texto[self.pos].isalnum()):
+                self.pos += 1
+            return Token("Id", self.texto[start:self.pos], start)
 
         elif c == '(':
             self.pos += 1
@@ -53,6 +60,14 @@ class Lexer:
         elif c == '/':
             self.pos += 1
             return Token("Div", "/", self.pos - 1)
+        
+        elif c == '=':
+            self.pos += 1
+            return Token("Igual", "=", self.pos - 1)
+        
+        elif c == ';':
+            self.pos += 1
+            return Token("PontoVirgula", ";", self.pos - 1)
 
         else:
             raise Exception(f"Erro léxico na posição {self.pos}: caractere inválido '{c}'")
