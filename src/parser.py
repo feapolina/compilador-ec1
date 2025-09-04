@@ -1,6 +1,9 @@
 from .ast_nodes import * 
 from .lexer import *
 
+# from ast_nodes import * 
+# from lexer import *
+
 class Parser:
 
     def __init__(self):
@@ -129,18 +132,6 @@ class Parser:
         if index != len(tokens):
             raise SyntaxError("Tokens restantes após o fim do programa")
         return Programa(declaracoes, expFinal)
-        
-        try:
-            if not tokens:
-                return None
-                
-            ast, next_index = parse_expr(0)
-            if next_index != len(tokens):
-                raise SyntaxError(f"Tokens restantes após o fim da análise: {tokens[next_index:]}")
-            return ast
-        except Exception as e:
-            print(f"Erro na análise sintática: {e}")
-            return None
 
     def print_ast(self, node, indent=0, last=False):
         if node is None:
@@ -273,7 +264,7 @@ def main():
     parser = Parser()
    
     arquivo = None
-    with open("tests/teste5.ec1", "r") as f:
+    with open("../tests/teste6_erro.ec1", "r") as f:
         arquivo = f.read()
 
 

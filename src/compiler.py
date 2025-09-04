@@ -30,6 +30,30 @@ class Compiler:
             if node is None:
                 return
 
+            # Caso Programa
+            if isinstance(node, Programa):
+                gerar_codigo(node.declaracoes,code)
+                gerar_codigo(node.expressaoFinal,code)
+                return
+            
+            # Caso Declaração
+            if isinstance(node, Declaracao):
+                # if isinstance(node.expressao, BinOp):
+                #     code[0] += f"\n    # {node.nomeVariavel} = {node.expressao.left} {node.expressao.op} {node.expressao.right}"
+                gerar_codigo(node.expressao,code)
+                return
+
+            # Caso Var
+            if isinstance(node,Var):
+                code[0] += f"\n    mov %rax, {node.nomeVariavel}\n"
+                return
+            
+            # Caso list
+            if isinstance(node,list):
+                for child in node:
+                    gerar_codigo(child,code)
+                return
+
             # Caso folha (número)
             if isinstance(node, Number):
                 code[0] += f"\n    mov ${node.value}, %rax"
@@ -62,25 +86,41 @@ class Compiler:
 
             raise TypeError(f"Tipo de nó não suportado no gerador: {type(node).__name__}")
 
-        self.obj_parser = Parser()
-        self.obj_parser.lexic_analyse(self.code)
-        self.tree = self.obj_parser.parse(self.obj_parser.tokenlist)
+        def gerar_variaveis(node,code):
+            if node is None:
+                return
+            for n in node:
+                if isinstance(n,Declaracao):
+                    code[0] += f"\n.lcomm {n.nomeVariavel}, 8"
+        try:
+            self.obj_parser = Parser()
+            self.obj_parser.lexic_analyse(self.code)
+            self.tree = self.obj_parser.parse(self.obj_parser.tokenlist)
+            
 
-        if self.tree is None:
-            print("Erro: a árvore AST é None — verifique se o parser construiu a árvore corretamente.")
-            return
-
+            if self.tree is None:
+                print("Erro: a árvore AST é None — verifique se o parser construiu a árvore corretamente.")
+                return
+            
+            self.obj_parser.semantic_analysis(self.tree)
+        except Exception as e:
+            raise Exception(f"Erro: {e}")
+            
         # Cabeçalho do assembly
         self.asmcode = [""]
-        self.asmcode[0] += ".section .text"
+        self.asmcode[0] +=".section .bss"
+        gerar_variaveis(self.tree.declaracoes,self.asmcode)
+        self.asmcode[0] += "\n\n.section .text"
         self.asmcode[0] += "\n.globl _start"
         self.asmcode[0] += "\n_start:"
 
         # Gera o código da expressão
         gerar_codigo(self.tree, self.asmcode)
 
-        self.asmcode[0] += "\n    call imprime_num"
-        
+        print(self.asmcode[0])
+
+        self.asmcode[0] += "\n\n    call imprime_num"
+            
         self.asmcode[0] += "\n    call sair"
         self.asmcode[0] += "\n.include \"../runtime/runtime.s\""
 

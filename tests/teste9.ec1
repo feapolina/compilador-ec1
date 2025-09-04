@@ -1,0 +1,4 @@
+total = 100;
+subtotal = total - 25;
+total = subtotal * 2;
+= total + subtotal
