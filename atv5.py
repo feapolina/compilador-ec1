@@ -22,6 +22,28 @@ class Parser:
         except Exception as e:
             print(e)
 
+    def semantic_analysis(self, node):
+        simbolos = set()
+
+        def check_expr(expr):
+            if isinstance(expr, Var):
+                if expr.nomeVariavel not in simbolos:
+                    raise Exception(f"Erro: variável '{expr.nomeVariavel}' não declarada")
+            elif isinstance(expr, BinOp):
+                check_expr(expr.left)
+                check_expr(expr.right)
+            elif isinstance(expr, Number):
+                pass
+            # Adicione outros tipos de nós se necessário
+
+        if isinstance(node, Programa):
+            for decl in node.declaracoes:
+                check_expr(decl.expressao)
+                simbolos.add(decl.nomeVariavel)
+            check_expr(node.expressaoFinal)
+        else:
+            raise Exception("AST não é um Programa")
+
     def parse(self, tokens):
         def parse_expr(index):
             # Parse de expressões com precedência
@@ -249,18 +271,25 @@ class Parser:
 
 
 def main():
-    paser = Parser()
+    parser = Parser()
    
     arquivo = None
     with open("tests/teste5.ec1", "r") as f:
         arquivo = f.read()
 
 
-    paser.lexic_analyse(arquivo)
+    parser.lexic_analyse(arquivo)
    
-    root = paser.parse(paser.tokenlist)
+    root = parser.parse(parser.tokenlist)
     
-    paser.print_ast_tree(root)
+     # Análise semântica
+    try:
+        parser.semantic_analysis(root)
+        print("Análise semântica concluída sem erros.")
+    except Exception as e:
+        print(e)
+
+    parser.print_ast_tree(root)
 
 
 if __name__ == "__main__":
