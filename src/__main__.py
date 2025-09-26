@@ -7,7 +7,7 @@ def main():
     
     try:
         # O caminho do arquivo de entrada será relativo à raiz do projeto
-        entrada = input("Digite o nome do arquivo de entrada (ex: tests/inputs/teste1.ec2):\n")
+        entrada = input("Digite o nome do arquivo de entrada (ex: tests/test1.cmd):\n")
         comp.read_file(entrada)
         comp.compile()
 

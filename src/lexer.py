@@ -45,6 +45,14 @@ class Lexer:
             self.pos += 1
             return Token("ParenDir", ")", self.pos - 1)
 
+        elif c == '{':
+            self.pos += 1
+            return Token("ChaveEsq", "{", self.pos - 1)
+
+        elif c == '}':
+            self.pos += 1
+            return Token("ChaveDir", "}", self.pos - 1)
+
         elif c == '+':
             self.pos += 1
             return Token("Soma", "+", self.pos - 1)
@@ -63,11 +71,27 @@ class Lexer:
         
         elif c == '=':
             self.pos += 1
-            return Token("Igual", "=", self.pos - 1)
+            if self.texto[self.pos] == "=":
+                self.pos += 1
+                return Token("IgualIgual", "==", self.pos - 1)
+            else:
+                return Token("Igual", "=", self.pos - 1)
+
+        elif c == '>':
+            self.pos += 1
+            return Token("Maior", ">", self.pos - 1)
+
+        elif c == '<':
+            self.pos += 1
+            return Token("Menor", "<", self.pos - 1)
         
         elif c == ';':
             self.pos += 1
             return Token("PontoVirgula", ";", self.pos - 1)
+
+        elif c == ',':
+            self.pos += 1
+            return Token("Virgula", ",", self.pos - 1)
 
         else:
             raise Exception(f"Erro léxico na posição {self.pos}: caractere inválido '{c}'")
@@ -83,7 +107,7 @@ class Lexer:
 
 # Teste básico
 if __name__ == "__main__":
-    arquivo_entrada = "tests/teste1.ec2"
+    arquivo_entrada = "tests/test2.cmd"
 
     with open(arquivo_entrada, "r") as f:
         conteudo = f.read()
