@@ -67,4 +67,9 @@ class Parametro(Node):
         self.nome = nome
         self.tipo = tipo
 
+class Atribuicao(Node):
+    def __init__(self, nomeVariavel, expressao):
+        self.nomeVariavel = nomeVariavel
+        self.expressao = expressao
+
 # Removido Exemplos de Uso

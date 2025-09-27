@@ -110,30 +110,62 @@ class Parser:
                 elif isinstance(stmt, If):
                     verificar_expr(stmt.condicao, escopo_atual)
                     
-                    # Verificar bloco if
+                    # Verificar bloco if (com escopo separado para evitar conflitos)
+                    escopo_if = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                     for sub_stmt in stmt.bloco_if.statements:
-                        verificar_statement(sub_stmt, escopo_atual)
+                        verificar_statement(sub_stmt, escopo_if)  # Usar escopo_if, não escopo_atual
                     
                     # Verificar bloco else se existir
                     if stmt.bloco_else:
+                        escopo_else = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                         for sub_stmt in stmt.bloco_else.statements:
-                            verificar_statement(sub_stmt, escopo_atual)
+                            verificar_statement(sub_stmt, escopo_else)  # Usar escopo_else
                 
                 elif isinstance(stmt, While):
                     verificar_expr(stmt.condicao, escopo_atual)
                     
+                    # Verificar bloco while (com escopo separado)
+                    escopo_while = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                     for sub_stmt in stmt.bloco.statements:
-                        verificar_statement(sub_stmt, escopo_atual)
+                        verificar_statement(sub_stmt, escopo_while)  # Usar escopo_while
                 
                 elif isinstance(stmt, Bloco):
+                    # Bloco cria novo escopo
+                    escopo_bloco = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                     for sub_stmt in stmt.statements:
-                        verificar_statement(sub_stmt, escopo_atual)
+                        verificar_statement(sub_stmt, escopo_bloco)
+                
+                # ADICIONAR: Suporte a atribuições simples (sem 'var')
+                elif isinstance(stmt, Declaracao) and not hasattr(stmt, 'tipo'):
+                    # Isso é uma atribuição, não uma declaração
+                    verificar_expr(stmt.expressao, escopo_atual)
+                    # Verificar se variável existe
+                    escopo_temp = escopo_atual
+                    while escopo_temp:
+                        if stmt.nomeVariavel in escopo_temp['variaveis'] or stmt.nomeVariavel in escopo_temp['parametros']:
+                            break
+                        escopo_temp = escopo_temp['parent']
+                    else:
+                        erros.append(f"Variável '{stmt.nomeVariavel}' não declarada")
                 
                 elif isinstance(stmt, ChamadaFuncao):
                     verificar_expr(stmt, escopo_atual)
+
+                elif isinstance(stmt, Atribuicao):
+                    # Verificar a expressão
+                    verificar_expr(stmt.expressao, escopo_atual)
+                    # Verificar se variável existe
+                    escopo_temp = escopo_atual
+                    while escopo_temp:
+                        if stmt.nomeVariavel in escopo_temp['variaveis'] or stmt.nomeVariavel in escopo_temp['parametros']:
+                            break
+                        escopo_temp = escopo_temp['parent']
+                    else:
+                        erros.append(f"Variável '{stmt.nomeVariavel}' não declarada")
                 
                 else:
                     erros.append(f"Tipo de statement não suportado: {type(stmt).__name__}")
+
             
             # Verificar corpo da função
             for stmt in funcao.corpo.statements:
@@ -387,6 +419,9 @@ class Parser:
                     index += 1
                 return Return(expr), index
             
+            elif token == 'var':
+                return parse_declaracao_variavel(index)
+
             # Atribuição de variável (sem 'var')
             elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '=':
                 nome = token
@@ -394,7 +429,7 @@ class Parser:
                 expr, index = parse_expr(index)
                 if index < len(tokens) and tokens[index] == ';':
                     index += 1
-                return Declaracao(nome, expr), index
+                return Atribuicao(nome, expr), index
             
             # Chamada de função como statement
             elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '(':

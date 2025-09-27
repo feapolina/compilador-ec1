@@ -97,7 +97,6 @@ class Compiler:
                     offset = mapa_variaveis[expr.nomeVariavel]
                     code[0] += f"\n    mov {offset}(%rbp), %rax"
                 else:
-                    # Variável global (fallback)
                     code[0] += f"\n    mov {expr.nomeVariavel}, %rax"
             
             elif isinstance(expr, BinOp):
@@ -118,6 +117,33 @@ class Compiler:
                     code[0] += "\n    mov %rbx, %rax"  
                     code[0] += "\n    xor %rdx, %rdx"
                     code[0] += "\n    idiv %rcx"
+            
+            # ⚠️ ADICIONAR SUPORTE PARA COMPARACAO
+            elif isinstance(expr, Comparacao):
+                gerar_codigo_expr(expr.left, code, mapa_variaveis, nome_funcao)
+                code[0] += "\n    push %rax"
+                gerar_codigo_expr(expr.right, code, mapa_variaveis, nome_funcao)
+                code[0] += "\n    pop %rbx"
+                
+                code[0] += "\n    cmp %rax, %rbx"  # Compara right (RAX) com left (RBX)
+                
+                op = expr.op
+                if op == '==':
+                    code[0] += "\n    sete %al"
+                elif op == '!=':
+                    code[0] += "\n    setne %al"
+                elif op == '<':
+                    code[0] += "\n    setl %al"    # set if left < right
+                elif op == '>':
+                    code[0] += "\n    setg %al"    # set if left > right
+                elif op == '<=':
+                    code[0] += "\n    setle %al"
+                elif op == '>=':
+                    code[0] += "\n    setge %al"
+                else:
+                    raise Exception(f"Operador de comparação desconhecido: {op}")
+                
+                code[0] += "\n    movzx %al, %rax"  # Extender para 64 bits
             
             elif isinstance(expr, ChamadaFuncao):
                 # Salvar registradores caller-saved
@@ -157,6 +183,7 @@ class Compiler:
                 label_false = f"L{label_counter}"; label_counter += 1
                 label_end = f"L{label_counter}"; label_counter += 1
                 
+                # ⚠️ CORREÇÃO: Usar gerar_codigo_expr para a condição (que pode ser Comparacao)
                 gerar_codigo_expr(stmt.condicao, code, mapa_variaveis, nome_funcao)
                 code[0] += f"\n    cmp $0, %rax"
                 code[0] += f"\n    je {label_false}"
@@ -183,7 +210,7 @@ class Compiler:
                         else:
                             gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
                     code[0] += f"\n{label_end}:"
-            
+              
             elif isinstance(stmt, While):
                 label_start = f"L{label_counter}"; label_counter += 1
                 label_end = f"L{label_counter}"; label_counter += 1
