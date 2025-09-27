@@ -1,13 +1,10 @@
-
-a = 1;
-b = 2;
-c = 3;
-delta = b * b - 4 * a * c;
-{
-if (delta < 0) {
-delta = 0 - delta;
-} else {
-delta = delta;
+fun soma(var a, var b) {
+    var resultado = a + b;
+    return resultado;
 }
-return delta;
+
+fun main() {
+    var x = 5;
+    var y = 10;
+    return soma(x, y);
 }

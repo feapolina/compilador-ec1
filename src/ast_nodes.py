@@ -12,15 +12,16 @@ class BinOp(Node):
         self.right = right
 
 class Programa:
-    def __init__(self, declaracoes, expressaoFinal=None):  # expressaoFinal é opcional
-        self.declaracoes = declaracoes
-        self.expressaoFinal = expressaoFinal
+    def __init__(self, funcoes, funcao_main):
+        self.funcoes = funcoes  # lista de Funcao
+        self.funcao_main = funcao_main  # Funcao (a main)
 
 class Declaracao:
-    def __init__(self, nomeVariavel, expressao):
+    def __init__(self, nomeVariavel, expressao, tipo='var'):
         self.nomeVariavel = nomeVariavel
         self.expressao = expressao
-        
+        self.tipo = tipo  # 'var' para declarações com var
+
 class Var:
     def __init__(self, nomeVariavel):
         self.nomeVariavel = nomeVariavel
@@ -50,14 +51,20 @@ class Return(Node):
     def __init__(self, expressao):
         self.expressao = expressao
 
-# Exemplo de uso
-# raiz = Node("Raiz")
-# filho1 = Node("Filho 1")
-# filho2 = Node("Filho 2")
-# neto1 = Node("Neto 1")
+class Funcao(Node):
+    def __init__(self, nome, parametros, corpo):
+        self.nome = nome
+        self.parametros = parametros  # lista de strings com nomes dos parâmetros
+        self.corpo = corpo  # Bloco (contém statements da função)
 
-# raiz.add_child(filho1)
-# raiz.add_child(filho2)
-# filho1.add_child(neto1)
+class ChamadaFuncao(Node):
+    def __init__(self, nome, argumentos):
+        self.nome = nome
+        self.argumentos = argumentos  # lista de expressões (argumentos passados)
 
-# raiz.print_tree()
+class Parametro(Node):
+    def __init__(self, nome, tipo='var'):
+        self.nome = nome
+        self.tipo = tipo
+
+# Removido Exemplos de Uso

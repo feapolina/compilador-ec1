@@ -1,12 +1,20 @@
-x = 2;
-y = 5;
-conta = x + y;
+fun soma(var a, var b) {
+    var resultado = a + b;
+    return resultado;
+}
+fun subtra(var a, var b) {
+	var resultado = a - b;
+	return resultado
+}
+fun multi(var a, var b) {
+	var resultado = a * b;
+	return resultado
+}
 
-{
-if (conta > 10) {
-conta = conta + 20;
-} else {
-conta = conta + 10;
+fun main() {
+    var x = 5;
+    var y = 10;
+	var z = multi(x, y);
+    return z;
 }
-return conta;
-}
+

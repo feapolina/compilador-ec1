@@ -1,10 +1,14 @@
-n = 1;
-m = 10;
-soma = 10;
-{
-while (n < m) {
-soma = soma + n;
-n = n + 1;
+fun soma(var a, var b) {
+    var resultado = a + b;
+    return resultado;
 }
-return soma;
+fun subtra(var a, var b) {
+	var resultado = a - b;
+	return resultado
+}
+
+fun main() {
+    var x = 5;
+    var y = 10;
+    return subtra(x, y);
 }

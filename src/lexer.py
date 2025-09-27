@@ -14,6 +14,17 @@ class Lexer:
         self.texto = texto
         self.pos = 0
         self.length = len(texto)
+        
+        # Palavras-chave da linguagem
+        self.palavras_chave = {
+            'fun': 'Fun',
+            'var': 'Var', 
+            'main': 'Main',
+            'return': 'Return',
+            'if': 'If',
+            'else': 'Else',
+            'while': 'While'
+        }
 
     def proximo_token(self):
         while self.pos < self.length and self.texto[self.pos].isspace():
@@ -24,19 +35,29 @@ class Lexer:
 
         c = self.texto[self.pos]
 
+        # Números
         if c.isdigit():
             start = self.pos
             while self.pos < self.length and self.texto[self.pos].isdigit():
                 self.pos += 1
             return Token("Numero", self.texto[start:self.pos], start)
         
-        # Identificadores: começam com letra, podem conter números e letras
-        elif c.isalpha():
+        # Identificadores e palavras-chave
+        elif c.isalpha() or c == '_':
             start = self.pos
-            while self.pos < self.length and (self.texto[self.pos].isalnum()):
+            # Permite letras, números e underscores
+            while self.pos < self.length and (self.texto[self.pos].isalnum() or self.texto[self.pos] == '_'):
                 self.pos += 1
-            return Token("Id", self.texto[start:self.pos], start)
+            
+            palavra = self.texto[start:self.pos]
+            
+            # Verifica se é palavra-chave
+            if palavra in self.palavras_chave:
+                return Token(self.palavras_chave[palavra], palavra, start)
+            else:
+                return Token("Id", palavra, start)
 
+        # Operadores e símbolos (mantendo o código existente)
         elif c == '(':
             self.pos += 1
             return Token("ParenEsq", "(", self.pos - 1)
@@ -71,19 +92,35 @@ class Lexer:
         
         elif c == '=':
             self.pos += 1
-            if self.texto[self.pos] == "=":
+            if self.pos < self.length and self.texto[self.pos] == "=":
                 self.pos += 1
-                return Token("IgualIgual", "==", self.pos - 1)
+                return Token("IgualIgual", "==", self.pos - 2)
             else:
                 return Token("Igual", "=", self.pos - 1)
 
         elif c == '>':
             self.pos += 1
-            return Token("Maior", ">", self.pos - 1)
+            if self.pos < self.length and self.texto[self.pos] == "=":
+                self.pos += 1
+                return Token("MaiorIgual", ">=", self.pos - 2)
+            else:
+                return Token("Maior", ">", self.pos - 1)
 
         elif c == '<':
             self.pos += 1
-            return Token("Menor", "<", self.pos - 1)
+            if self.pos < self.length and self.texto[self.pos] == "=":
+                self.pos += 1
+                return Token("MenorIgual", "<=", self.pos - 2)
+            else:
+                return Token("Menor", "<", self.pos - 1)
+        
+        elif c == '!':
+            self.pos += 1
+            if self.pos < self.length and self.texto[self.pos] == "=":
+                self.pos += 1
+                return Token("Diferente", "!=", self.pos - 2)
+            else:
+                raise Exception(f"Erro léxico na posição {self.pos}: '!' deve ser seguido de '='")
         
         elif c == ';':
             self.pos += 1

@@ -25,64 +25,169 @@ class Parser:
             print(e)
 
     def semantic_analysis(self, node):
-        simbolos = set()
-
-        def check_expr(expr):
-            if isinstance(expr, Var):
-                if expr.nomeVariavel not in simbolos:
-                    raise Exception(f"Erro: variável '{expr.nomeVariavel}' não declarada")
-            elif isinstance(expr, BinOp):
-                check_expr(expr.left)
-                check_expr(expr.right)
-            elif isinstance(expr, Number):
-                pass
-            elif isinstance(expr, Comparacao):
-                check_expr(expr.left)
-                check_expr(expr.right)
-            elif isinstance(expr, Return):
-                check_expr(expr.expressao)
-            # Adicione outros tipos de nós se necessário
-
-        if isinstance(node, Programa):
-            for decl in node.declaracoes:
-                if isinstance(decl, Declaracao):
-                    check_expr(decl.expressao)
-                    simbolos.add(decl.nomeVariavel)
-                elif isinstance(decl, If):
-                    check_expr(decl.condicao)
-                    # Verificar bloco if
-                    for stmt in decl.bloco_if.statements:
-                        if isinstance(stmt, Declaracao):
-                            check_expr(stmt.expressao)
-                            simbolos.add(stmt.nomeVariavel)
-                    # Verificar bloco else se existir
-                    if decl.bloco_else:
-                        for stmt in decl.bloco_else.statements:
-                            if isinstance(stmt, Declaracao):
-                                check_expr(stmt.expressao)
-                                simbolos.add(stmt.nomeVariavel)
-                elif isinstance(decl, While):
-                    check_expr(decl.condicao)
-                    for stmt in decl.bloco.statements:
-                        if isinstance(stmt, Declaracao):
-                            check_expr(stmt.expressao)
-                            simbolos.add(stmt.nomeVariavel)
-                elif isinstance(decl, Bloco):
-                    for stmt in decl.statements:
-                        if isinstance(stmt, Declaracao):
-                            check_expr(stmt.expressao)
-                            simbolos.add(stmt.nomeVariavel)
-                        elif isinstance(stmt, Return):
-                            check_expr(stmt.expressao)
+        # Dicionário de funções declaradas: nome -> Funcao
+        funcoes_declaradas = {}
+        erros = []
+        
+        def verificar_funcao(funcao, escopo_pai=None):
+            """Verifica uma função individual com seu próprio escopo"""
+            nonlocal erros
             
-            # Verificar expressão final se existir
-            if node.expressaoFinal:
-                check_expr(node.expressaoFinal)
-        else:
+            # Criar novo escopo para a função
+            escopo = {
+                'parent': escopo_pai,
+                'variaveis': set(),
+                'parametros': set(funcao.parametros),
+                'funcao_atual': funcao.nome
+            }
+            
+            # Adicionar parâmetros ao escopo
+            for param in funcao.parametros:
+                escopo['variaveis'].add(param)
+            
+            def verificar_expr(expr, escopo_atual):
+                """Verifica uma expressão dentro de um escopo"""
+                nonlocal erros
+                
+                if isinstance(expr, Var):
+                    # Verificar se variável existe no escopo atual ou pais
+                    escopo_temp = escopo_atual
+                    while escopo_temp:
+                        if expr.nomeVariavel in escopo_temp['variaveis'] or expr.nomeVariavel in escopo_temp['parametros']:
+                            return
+                        escopo_temp = escopo_temp['parent']
+                    erros.append(f"Variável '{expr.nomeVariavel}' não declarada na função '{escopo_atual['funcao_atual']}'")
+                
+                elif isinstance(expr, ChamadaFuncao):
+                    # Verificar se função existe
+                    if expr.nome not in funcoes_declaradas and expr.nome != escopo_atual['funcao_atual']:
+                        erros.append(f"Função '{expr.nome}' não declarada")
+                    
+                    # Verificar número de argumentos
+                    if expr.nome in funcoes_declaradas:
+                        funcao_chamada = funcoes_declaradas[expr.nome]
+                        if len(expr.argumentos) != len(funcao_chamada.parametros):
+                            erros.append(f"Função '{expr.nome}' espera {len(funcao_chamada.parametros)} argumentos, mas {len(expr.argumentos)} foram fornecidos")
+                    
+                    # Verificar cada argumento
+                    for arg in expr.argumentos:
+                        verificar_expr(arg, escopo_atual)
+                
+                elif isinstance(expr, BinOp):
+                    verificar_expr(expr.left, escopo_atual)
+                    verificar_expr(expr.right, escopo_atual)
+                
+                elif isinstance(expr, Comparacao):
+                    verificar_expr(expr.left, escopo_atual)
+                    verificar_expr(expr.right, escopo_atual)
+                
+                elif isinstance(expr, Number):
+                    pass  # Números são sempre válidos
+                
+                elif isinstance(expr, Return):
+                    verificar_expr(expr.expressao, escopo_atual)
+                
+                else:
+                    erros.append(f"Tipo de expressão não suportado: {type(expr).__name__}")
+            
+            def verificar_statement(stmt, escopo_atual):
+                """Verifica um statement dentro de um escopo"""
+                nonlocal erros
+                
+                if isinstance(stmt, Declaracao):
+                    # Verificar a expressão da declaração
+                    verificar_expr(stmt.expressao, escopo_atual)
+                    
+                    # Verificar se variável já foi declarada no mesmo escopo
+                    if stmt.nomeVariavel in escopo_atual['variaveis'] or stmt.nomeVariavel in escopo_atual['parametros']:
+                        erros.append(f"Variável '{stmt.nomeVariavel}' já declarada no escopo atual")
+                    else:
+                        escopo_atual['variaveis'].add(stmt.nomeVariavel)
+                
+                elif isinstance(stmt, Return):
+                    verificar_expr(stmt.expressao, escopo_atual)
+                
+                elif isinstance(stmt, If):
+                    verificar_expr(stmt.condicao, escopo_atual)
+                    
+                    # Verificar bloco if
+                    for sub_stmt in stmt.bloco_if.statements:
+                        verificar_statement(sub_stmt, escopo_atual)
+                    
+                    # Verificar bloco else se existir
+                    if stmt.bloco_else:
+                        for sub_stmt in stmt.bloco_else.statements:
+                            verificar_statement(sub_stmt, escopo_atual)
+                
+                elif isinstance(stmt, While):
+                    verificar_expr(stmt.condicao, escopo_atual)
+                    
+                    for sub_stmt in stmt.bloco.statements:
+                        verificar_statement(sub_stmt, escopo_atual)
+                
+                elif isinstance(stmt, Bloco):
+                    for sub_stmt in stmt.statements:
+                        verificar_statement(sub_stmt, escopo_atual)
+                
+                elif isinstance(stmt, ChamadaFuncao):
+                    verificar_expr(stmt, escopo_atual)
+                
+                else:
+                    erros.append(f"Tipo de statement não suportado: {type(stmt).__name__}")
+            
+            # Verificar corpo da função
+            for stmt in funcao.corpo.statements:
+                verificar_statement(stmt, escopo)
+        
+        def verificar_funcao_main(funcao_main):
+            """Verificações específicas para a função main"""
+            nonlocal erros
+            
+            # Verificar se main não tem parâmetros
+            if funcao_main.parametros:
+                erros.append("Função 'main' não deve ter parâmetros")
+            
+            # Verificar se main tem return (opcional, mas recomendado)
+            tem_return = any(isinstance(stmt, Return) for stmt in funcao_main.corpo.statements)
+            if not tem_return:
+                # Apenas um aviso, não um erro
+                print("Aviso: função 'main' não tem instrução 'return'")
+        
+        # --- Análise semântica principal ---
+        if not isinstance(node, Programa):
             raise Exception("AST não é um Programa")
+        
+        # Fase 1: Coletar declarações de funções
+        for funcao in node.funcoes:
+            if funcao.nome in funcoes_declaradas:
+                erros.append(f"Função '{funcao.nome}' já declarada")
+            else:
+                funcoes_declaradas[funcao.nome] = funcao
+        
+        # Adicionar main às funções declaradas para permitir chamadas recursivas indiretas
+        funcoes_declaradas['main'] = node.funcao_main
+        
+        # Fase 2: Verificar cada função individualmente
+        for funcao in node.funcoes:
+            verificar_funcao(funcao)
+        
+        # Verificar função main
+        verificar_funcao(node.funcao_main)
+        verificar_funcao_main(node.funcao_main)
+        
+        # Verificar se há chamadas a funções não declaradas
+        # (já feito durante a verificação das expressões)
+        
+        # Reportar erros
+        if erros:
+            for erro in erros:
+                print(f"Erro semântico: {erro}")
+            raise Exception("Análise semântica falhou")
+        
+        print("Análise semântica concluída com sucesso!")
 
     def parse(self, tokens):
-    
+        
         def parse_expr(index):
             # Parse de expressões com precedência
             def parse_term(index):
@@ -98,7 +203,7 @@ class Parser:
                 return left, index
             
             def parse_factor(index):
-                # Parse de fatores (números ou expressões entre parênteses)
+                # Parse de fatores (números, variáveis, chamadas de função, ou expressões entre parênteses)
                 if index >= len(tokens):
                     raise SyntaxError("Fim inesperado dos tokens")
                 
@@ -112,6 +217,28 @@ class Parser:
                         raise SyntaxError(f"Esperado ')', mas achou {tokens[index] if index < len(tokens) else 'EOF'}")
                     return expr, index + 1
                 
+                # Chamada de função
+                elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '(':
+                    nome_funcao = token
+                    index += 2  # pular nome e '('
+                    argumentos = []
+                    
+                    # Parse dos argumentos (se houver)
+                    if index < len(tokens) and tokens[index] != ')':
+                        while True:
+                            expr, index = parse_expr(index)
+                            argumentos.append(expr)
+                            
+                            if index >= len(tokens) or tokens[index] != ',':
+                                break
+                            index += 1  # pular a vírgula
+                    
+                    if index >= len(tokens) or tokens[index] != ')':
+                        raise SyntaxError("Esperado ')' após argumentos da função")
+                    index += 1
+                    
+                    return ChamadaFuncao(nome_funcao, argumentos), index
+                
                 # Variável
                 elif token.isidentifier():
                     return Var(token), index + 1
@@ -121,7 +248,7 @@ class Parser:
                     return Number(int(token)), index + 1
                 
                 else:
-                    raise SyntaxError(f"Token inesperado: {token}")
+                    raise SyntaxError(f"Token inesperado em expressão: {token}")
             
             # Parse da expressão principal (termos com + e -)
             left, index = parse_term(index)
@@ -146,8 +273,68 @@ class Parser:
             
             return left, index
         
+        def parse_declaracao_variavel(index):
+            # 'var' <ident> '=' <exp> ';'
+            if tokens[index] != 'var':
+                raise SyntaxError("Esperado 'var' antes da declaração de variável")
+            index += 1
+            
+            if index >= len(tokens) or not tokens[index].isidentifier():
+                raise SyntaxError("Esperado identificador após 'var'")
+            
+            nome = tokens[index]
+            index += 1
+            
+            if index >= len(tokens) or tokens[index] != '=':
+                raise SyntaxError("Esperado '=' em declaração")
+            index += 1
+            
+            expr, index = parse_expr(index)
+            
+            if index >= len(tokens) or tokens[index] != ';':
+                raise SyntaxError("Esperado ';' ao final da declaração")
+            index += 1
+            
+            return Declaracao(nome, expr, 'var'), index
+        
+        def parse_bloco(index):
+            # Parse de um bloco entre chaves { }
+            if index >= len(tokens) or tokens[index] != '{':
+                raise SyntaxError("Esperado '{' para início de bloco")
+            
+            index += 1  # Pular '{'
+            statements = []
+            
+            while index < len(tokens) and tokens[index] != '}':
+                if tokens[index] == 'var':
+                    # Declaração de variável
+                    decl, index = parse_declaracao_variavel(index)
+                    statements.append(decl)
+                elif tokens[index] in ('if', 'while', 'return'):
+                    # Statement de controle
+                    stmt, index = parse_statement(index)
+                    statements.append(stmt)
+                elif tokens[index] == '{':
+                    # Bloco aninhado
+                    bloco, index = parse_bloco(index)
+                    statements.append(bloco)
+                else:
+                    # Expressão simples (atribuição ou chamada de função)
+                    if (index + 1 < len(tokens) and tokens[index].isidentifier() and 
+                        (tokens[index + 1] == '=' or tokens[index + 1] == '(')):
+                        stmt, index = parse_statement(index)
+                        statements.append(stmt)
+                    else:
+                        raise SyntaxError(f"Statement inválido no bloco: {tokens[index]}")
+            
+            if index >= len(tokens) or tokens[index] != '}':
+                raise SyntaxError("Esperado '}' ao final do bloco")
+            index += 1  # Pular '}'
+            
+            return Bloco(statements), index
+        
         def parse_statement(index):
-            # Parse de um statement (declaração, if, while, etc.)
+            # Parse de um statement
             if index >= len(tokens):
                 raise SyntaxError("Fim inesperado dos tokens")
             
@@ -160,17 +347,14 @@ class Parser:
                     raise SyntaxError("Esperado '(' após 'if'")
                 index += 1
                 
-                # Parse da condição
                 condicao, index = parse_comparacao(index)
                 
                 if index >= len(tokens) or tokens[index] != ')':
                     raise SyntaxError("Esperado ')' após condição do if")
                 index += 1
                 
-                # Parse do bloco if
                 bloco_if, index = parse_bloco(index)
                 
-                # Parse do else (opcional)
                 bloco_else = None
                 if index < len(tokens) and tokens[index] == 'else':
                     index += 1
@@ -185,14 +369,12 @@ class Parser:
                     raise SyntaxError("Esperado '(' após 'while'")
                 index += 1
                 
-                # Parse da condição
                 condicao, index = parse_comparacao(index)
                 
                 if index >= len(tokens) or tokens[index] != ')':
                     raise SyntaxError("Esperado ')' após condição do while")
                 index += 1
                 
-                # Parse do bloco
                 bloco, index = parse_bloco(index)
                 
                 return While(condicao, bloco), index
@@ -205,70 +387,106 @@ class Parser:
                     index += 1
                 return Return(expr), index
             
-            # Declaração de variável
+            # Atribuição de variável (sem 'var')
             elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '=':
-                return parse_declaracao(index)
+                nome = token
+                index += 2  # pular nome e '='
+                expr, index = parse_expr(index)
+                if index < len(tokens) and tokens[index] == ';':
+                    index += 1
+                return Declaracao(nome, expr), index
             
-            # Expressão simples (como um bloco {})
-            elif token == '{':
-                return parse_bloco(index)
+            # Chamada de função como statement
+            elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '(':
+                chamada, index = parse_expr(index)  # Reusa parse_expr para chamadas
+                if index < len(tokens) and tokens[index] == ';':
+                    index += 1
+                return chamada, index
             
             else:
                 raise SyntaxError(f"Statement inválido: {token}")
         
-        def parse_bloco(index):
-            # Parse de um bloco entre chaves { }
-            if index >= len(tokens) or tokens[index] != '{':
-                # Bloco de uma única instrução (sem chaves)
-                statement, index = parse_statement(index)
-                return Bloco([statement]), index
+        def parse_parametros_funcao(index):
+            # Parse da lista de parâmetros: (var id1, var id2, ...)
+            if index >= len(tokens) or tokens[index] != '(':
+                raise SyntaxError("Esperado '(' para parâmetros da função")
+            index += 1
             
-            index += 1  # Pular '{'
-            statements = []
+            parametros = []
             
-            while index < len(tokens) and tokens[index] != '}':
-                statement, index = parse_statement(index)
-                statements.append(statement)
+            # Se não há parâmetros
+            if index < len(tokens) and tokens[index] == ')':
+                return parametros, index + 1
             
-            if index >= len(tokens) or tokens[index] != '}':
-                raise SyntaxError("Esperado '}' ao final do bloco")
-            index += 1  # Pular '}'
+            # Parse dos parâmetros
+            while index < len(tokens):
+                if tokens[index] != 'var':
+                    raise SyntaxError("Esperado 'var' antes do parâmetro")
+                index += 1
+                
+                if index >= len(tokens) or not tokens[index].isidentifier():
+                    raise SyntaxError("Esperado nome do parâmetro após 'var'")
+                
+                parametros.append(tokens[index])
+                index += 1
+                
+                if index < len(tokens) and tokens[index] == ')':
+                    break
+                elif index < len(tokens) and tokens[index] == ',':
+                    index += 1
+                else:
+                    raise SyntaxError("Esperado ',' ou ')' após parâmetro")
             
-            return Bloco(statements), index
+            if index >= len(tokens) or tokens[index] != ')':
+                raise SyntaxError("Esperado ')' após parâmetros")
+            index += 1
+            
+            return parametros, index
         
-        def parse_declaracao(index):
-            # <ident> '=' <exp> ';'
+        def parse_funcao(index):
+            # 'fun' <ident> '(' parametros ')' bloco
+            if tokens[index] != 'fun':
+                raise SyntaxError("Esperado 'fun' para declaração de função")
+            index += 1
+            
+            if index >= len(tokens) or not tokens[index].isidentifier():
+                raise SyntaxError("Esperado nome da função após 'fun'")
+            
             nome = tokens[index]
             index += 1
-            if index >= len(tokens) or tokens[index] != '=':
-                raise SyntaxError("Esperado '=' em declaração")
-            index += 1
-            expr, index = parse_expr(index)
-            if index >= len(tokens) or tokens[index] != ';':
-                raise SyntaxError("Esperado ';' ao final da declaração")
-            index += 1
-            return Declaracao(nome, expr), index
             
-        # --- Aqui começa o parse do programa ---
-        index = 0
-        statements = []
+            # Parse dos parâmetros
+            parametros, index = parse_parametros_funcao(index)
+            
+            # Parse do corpo da função
+            corpo, index = parse_bloco(index)
+            
+            return Funcao(nome, parametros, corpo), index
         
-        # Parse de todas as declarações e statements
-        while index < len(tokens):
-            if tokens[index].isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '=':
-                # É uma declaração de variável
-                decl, index = parse_declaracao(index)
-                statements.append(decl)
+        # --- Parse principal do programa ---
+        index = 0
+        funcoes = []
+        funcao_main = None
+        
+        # Parse de todas as funções
+        while index < len(tokens) and tokens[index] == 'fun':
+            funcao, index = parse_funcao(index)
+            
+            if funcao.nome == 'main':
+                if funcao_main is not None:
+                    raise SyntaxError("Só pode haver uma função 'main'")
+                funcao_main = funcao
             else:
-                # É um statement de controle de fluxo ou bloco
-                statement, index = parse_statement(index)
-                statements.append(statement)
+                funcoes.append(funcao)
+        
+        if funcao_main is None:
+            raise SyntaxError("Função 'main' não encontrada")
         
         # Verificar se sobrou algum token
         if index != len(tokens):
-            raise SyntaxError(f"Tokens restantes após o fim do programa: {tokens[index:]}")
+            raise SyntaxError(f"Tokens restantes após parse: {tokens[index:]}")
         
-        return Programa(statements, None)  # Expressão final é opcional
+        return Programa(funcoes, funcao_main)
 
     def print_ast(self, node, indent=0, last=False):
         if node is None:

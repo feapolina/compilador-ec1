@@ -34,47 +34,79 @@ class Compiler:
 
     def compile(self):
 
-        def gerar_codigo(node, code):
-            if node is None:
-                return
-
-            # Caso Programa
-            if isinstance(node, Programa):
-                # Gerar código para todas as declarações
-                for decl in node.declaracoes:
-                    gerar_codigo(decl, code)
+        def gerar_codigo_funcao(funcao, code):
+            """Gera código para uma função individual"""
+            nonlocal label_counter
+            
+            code[0] += f"\n\n# Função {funcao.nome}"
+            code[0] += f"\n.globl {funcao.nome}"
+            code[0] += f"\n{funcao.nome}:"
+            
+            # Prologue
+            code[0] += "\n    push %rbp"
+            code[0] += "\n    mov %rsp, %rbp"
+            
+            # Calcular espaço para variáveis locais
+            variaveis_locais = []
+            for stmt in funcao.corpo.statements:
+                if isinstance(stmt, Declaracao):
+                    variaveis_locais.append(stmt.nomeVariavel)
+            
+            if variaveis_locais:
+                code[0] += f"\n    sub ${len(variaveis_locais) * 8}, %rsp"
+            
+            # Mapeamento de variáveis
+            mapa_variaveis = {}
+            
+            # Parâmetros: [rbp+16], [rbp+24], etc.
+            for i, param in enumerate(funcao.parametros):
+                mapa_variaveis[param] = 16 + i * 8
+            
+            # Variáveis locais: [rbp-8], [rbp-16], etc.
+            for i, var_name in enumerate(variaveis_locais):
+                mapa_variaveis[var_name] = -8 * (i + 1)
+            
+            # Gerar código para cada statement
+            for stmt in funcao.corpo.statements:
+                if isinstance(stmt, Declaracao):
+                    # Gerar expressão do lado direito
+                    gerar_codigo_expr(stmt.expressao, code, mapa_variaveis, funcao.nome)
+                    # Armazenar na variável local
+                    code[0] += f"\n    mov %rax, {mapa_variaveis[stmt.nomeVariavel]}(%rbp)"
                 
-                # Gerar código para expressão final se existir
-                if node.expressaoFinal:
-                    gerar_codigo(node.expressaoFinal, code)
-                return
+                elif isinstance(stmt, Return):
+                    gerar_codigo_expr(stmt.expressao, code, mapa_variaveis, funcao.nome)
+                    code[0] += f"\n    jmp {funcao.nome}_fim"
+                
+                else:
+                    gerar_codigo_stmt(stmt, code, mapa_variaveis, funcao.nome)
             
-            # Caso Declaração
-            if isinstance(node, Declaracao):
-                # Gerar código para a expressão (resultado em RAX)
-                gerar_codigo(node.expressao, code)
-                # Armazenar resultado na variável
-                code[0] += f"\n    mov %rax, {node.nomeVariavel}"
-                return
+            # Epilogue
+            code[0] += f"\n{funcao.nome}_fim:"
+            code[0] += "\n    mov %rbp, %rsp"
+            code[0] += "\n    pop %rbp"
+            code[0] += "\n    ret"
 
-            # Caso Var
-            if isinstance(node, Var):
-                code[0] += f"\n    mov {node.nomeVariavel}, %rax"
-                return
+        def gerar_codigo_expr(expr, code, mapa_variaveis, nome_funcao):
+            """Gera código para uma expressão"""
+            if isinstance(expr, Number):
+                code[0] += f"\n    mov ${expr.value}, %rax"
             
-            # Caso Number
-            if isinstance(node, Number):
-                code[0] += f"\n    mov ${node.value}, %rax"
-                return
-
-            # Caso BinOp
-            if isinstance(node, BinOp):
-                gerar_codigo(node.left, code)
+            elif isinstance(expr, Var):
+                if expr.nomeVariavel in mapa_variaveis:
+                    offset = mapa_variaveis[expr.nomeVariavel]
+                    code[0] += f"\n    mov {offset}(%rbp), %rax"
+                else:
+                    # Variável global (fallback)
+                    code[0] += f"\n    mov {expr.nomeVariavel}, %rax"
+            
+            elif isinstance(expr, BinOp):
+                gerar_codigo_expr(expr.left, code, mapa_variaveis, nome_funcao)
                 code[0] += "\n    push %rax"
-                gerar_codigo(node.right, code)
+                gerar_codigo_expr(expr.right, code, mapa_variaveis, nome_funcao)
                 code[0] += "\n    pop %rbx"
 
-                op = node.op
+                op = expr.op
                 if op == '+':
                     code[0] += "\n    add %rbx, %rax"
                 elif op == '-':
@@ -84,128 +116,109 @@ class Compiler:
                 elif op == '/':
                     code[0] += "\n    mov %rax, %rcx"  
                     code[0] += "\n    mov %rbx, %rax"  
-                    code[0] += "\n    xor %rdx, %rdx"  # Limpar RDX para divisão
-                    code[0] += "\n    idiv %rcx"      
-                else:
-                    raise Exception(f"Operador desconhecido: {op}")
-                return
-
-            # Caso Comparacao - VERSÃO CORRIGIDA
-            if isinstance(node, Comparacao):
-                # CORREÇÃO: Gerar código para o lado ESQUERDO primeiro
-                gerar_codigo(node.left, code)
-                code[0] += "\n    push %rax"
-                # Depois gerar código para o lado DIREITO
-                gerar_codigo(node.right, code)
+                    code[0] += "\n    xor %rdx, %rdx"
+                    code[0] += "\n    idiv %rcx"
+            
+            elif isinstance(expr, ChamadaFuncao):
+                # Salvar registradores caller-saved
+                code[0] += "\n    push %rbx"
+                code[0] += "\n    push %rcx"
+                code[0] += "\n    push %rdx"
+                code[0] += "\n    push %rsi"
+                code[0] += "\n    push %rdi"
+                
+                # Empilhar argumentos na ordem inversa
+                for arg in reversed(expr.argumentos):
+                    gerar_codigo_expr(arg, code, mapa_variaveis, nome_funcao)
+                    code[0] += "\n    push %rax"
+                
+                # Chamar função
+                code[0] += f"\n    call {expr.nome}"
+                
+                # Limpar argumentos da pilha
+                if expr.argumentos:
+                    code[0] += f"\n    add ${len(expr.argumentos) * 8}, %rsp"
+                
+                # Restaurar registradores
+                code[0] += "\n    pop %rdi"
+                code[0] += "\n    pop %rsi"
+                code[0] += "\n    pop %rdx"
+                code[0] += "\n    pop %rcx"
                 code[0] += "\n    pop %rbx"
-                
-                # CORREÇÃO: Agora comparamos left (RBX) com right (RAX)
-                code[0] += "\n    cmp %rax, %rbx"  # Compara left (RBX) com right (RAX)
-                
-                # Configurar RAX com 0 ou 1 baseado na comparação
-                op = node.op
-                if op == '==':
-                    code[0] += "\n    sete %al"
-                elif op == '<':
-                    code[0] += "\n    setl %al"    # set if left < right
-                elif op == '>':
-                    code[0] += "\n    setg %al"    # set if left > right
-                else:
-                    raise Exception(f"Operador de comparação desconhecido: {op}")
-                
-                # Extender AL para RAX (convertendo byte para quadword)
-                code[0] += "\n    movzx %al, %rax"
-                return
+            
+            else:
+                raise Exception(f"Tipo de expressão não suportado: {type(expr).__name__}")
 
-            # Caso If
-            if isinstance(node, If):
-                label_false = self.novo_label()
-                label_end = self.novo_label()
+        def gerar_codigo_stmt(stmt, code, mapa_variaveis, nome_funcao):
+            """Gera código para um statement"""
+            nonlocal label_counter
+            
+            if isinstance(stmt, If):
+                label_false = f"L{label_counter}"; label_counter += 1
+                label_end = f"L{label_counter}"; label_counter += 1
                 
-                # Gerar código para a condição
-                gerar_codigo(node.condicao, code)
-                
-                # Verificar se condição é falsa (0)
+                gerar_codigo_expr(stmt.condicao, code, mapa_variaveis, nome_funcao)
                 code[0] += f"\n    cmp $0, %rax"
                 code[0] += f"\n    je {label_false}"
                 
-                # Bloco if (verdadeiro)
-                gerar_codigo(node.bloco_if, code)
+                # Bloco if
+                for sub_stmt in stmt.bloco_if.statements:
+                    if isinstance(sub_stmt, Declaracao):
+                        gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                        code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                    else:
+                        gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
                 
-                # Pular para o final se necessário
-                if node.bloco_else:
+                if stmt.bloco_else:
                     code[0] += f"\n    jmp {label_end}"
                 
-                # Label para bloco else
                 code[0] += f"\n{label_false}:"
                 
-                # Bloco else (se existir)
-                if node.bloco_else:
-                    gerar_codigo(node.bloco_else, code)
+                # Bloco else
+                if stmt.bloco_else:
+                    for sub_stmt in stmt.bloco_else.statements:
+                        if isinstance(sub_stmt, Declaracao):
+                            gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                            code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                        else:
+                            gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
                     code[0] += f"\n{label_end}:"
-                return
-
-            # Caso While
-            if isinstance(node, While):
-                label_start = self.novo_label()
-                label_end = self.novo_label()
+            
+            elif isinstance(stmt, While):
+                label_start = f"L{label_counter}"; label_counter += 1
+                label_end = f"L{label_counter}"; label_counter += 1
                 
                 code[0] += f"\n{label_start}:"
-                
-                # Gerar código para a condição
-                gerar_codigo(node.condicao, code)
-                
-                # Verificar se condição é falsa (0)
+                gerar_codigo_expr(stmt.condicao, code, mapa_variaveis, nome_funcao)
                 code[0] += f"\n    cmp $0, %rax"
                 code[0] += f"\n    je {label_end}"
                 
-                # Bloco do while
-                gerar_codigo(node.bloco, code)
+                # Corpo do while
+                for sub_stmt in stmt.bloco.statements:
+                    if isinstance(sub_stmt, Declaracao):
+                        gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                        code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                    else:
+                        gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
                 
-                # Voltar para o início
                 code[0] += f"\n    jmp {label_start}"
                 code[0] += f"\n{label_end}:"
-                return
-
-            # Caso Bloco
-            if isinstance(node, Bloco):
-                for statement in node.statements:
-                    gerar_codigo(statement, code)
-                return
-
-            # Caso Return
-            if isinstance(node, Return):
-                gerar_codigo(node.expressao, code)
-                # Em assembly, o valor de retorno fica em RAX
-                # Para um programa simples, podemos apenas deixar o valor em RAX
-                return
-
-            raise TypeError(f"Tipo de nó não suportado no gerador: {type(node).__name__}")
-
-        def gerar_variaveis(node, code):
-            """Gera declarações de variáveis na seção .bss"""
-            variaveis = set()
             
-            def coletar_variaveis(n):
-                if isinstance(n, Declaracao):
-                    variaveis.add(n.nomeVariavel)
-                elif isinstance(n, Programa):
-                    for decl in n.declaracoes:
-                        coletar_variaveis(decl)
-                elif isinstance(n, If):
-                    coletar_variaveis(n.bloco_if)
-                    if n.bloco_else:
-                        coletar_variaveis(n.bloco_else)
-                elif isinstance(n, While):
-                    coletar_variaveis(n.bloco)
-                elif isinstance(n, Bloco):
-                    for stmt in n.statements:
-                        coletar_variaveis(stmt)
+            elif isinstance(stmt, Bloco):
+                for sub_stmt in stmt.statements:
+                    if isinstance(sub_stmt, Declaracao):
+                        gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                        # Nota: variáveis em blocos aninhados precisariam de escopo separado
+                        code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                    else:
+                        gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
             
-            coletar_variaveis(node)
-            
-            for var in variaveis:
-                code[0] += f"\n.lcomm {var}, 8"
+            elif isinstance(stmt, ChamadaFuncao):
+                # Chamada como statement (ignorar retorno)
+                gerar_codigo_expr(stmt, code, mapa_variaveis, nome_funcao)
+
+        # Contador global de labels
+        label_counter = 0
 
         try:
             self.obj_parser = Parser()
@@ -213,37 +226,47 @@ class Compiler:
             self.tree = self.obj_parser.parse(self.obj_parser.tokenlist)
             
             if self.tree is None:
-                print("Erro: a árvore AST é None — verifique se o parser construiu a árvore corretamente.")
+                print("Erro: a árvore AST é None")
                 return
             
             self.obj_parser.semantic_analysis(self.tree)
         except Exception as e:
             raise Exception(f"Erro: {e}")
-            
+        
         # Cabeçalho do assembly
-        self.asmcode = [""]
-        self.asmcode[0] += ".section .bss"
-        gerar_variaveis(self.tree, self.asmcode)
-        self.asmcode[0] += "\n\n.section .text"
+        self.asmcode = [".section .text"]
+        
+        # Gerar código para todas as funções (incluindo main)
+        for funcao in self.tree.funcoes:
+            gerar_codigo_funcao(funcao, self.asmcode)
+        
+        # Gerar código para main
+        gerar_codigo_funcao(self.tree.funcao_main, self.asmcode)
+        
+        # Ponto de entrada COM SUPPORTE A IMPRESSÃO
+        self.asmcode[0] += "\n\n# Ponto de entrada do programa"
         self.asmcode[0] += "\n.globl _start"
         self.asmcode[0] += "\n_start:"
-
-        # Gera o código do programa
-        gerar_codigo(self.tree, self.asmcode)
-
-        # Se não há expressão final, usar 0 como código de saída
-        if self.tree.expressaoFinal is None:
-            # Correção de BUG do print
-            #self.asmcode[0] += "\n    mov $0, %rax"
-            pass
-
+        self.asmcode[0] += "\n    call main"
+        
+        # IMPRIMIR o resultado antes de sair
+        self.asmcode[0] += "\n    # Imprimir resultado"
+        self.asmcode[0] += "\n    mov %rax, %rdi      # salvar resultado"
+        self.asmcode[0] += "\n    call imprime_num    # imprimir valor"
+        self.asmcode[0] += "\n    mov %rdi, %rax      # restaurar resultado para exit"
+        
+        self.asmcode[0] += "\n    mov %rax, %rdi    # código de saída"
+        self.asmcode[0] += "\n    call sair         # terminar programa"
+        
+        print("Código assembly gerado:")
         print(self.asmcode[0])
-
+        
         # Chamar função de impressão se necessário
         self.asmcode[0] += "\n\n    call imprime_num"
-            
         self.asmcode[0] += "\n    call sair"
         self.asmcode[0] += "\n.include \"./runtime/runtime.s\""
+
+        
 
         with open("saida.s", "w") as f:
             f.write(self.asmcode[0])
