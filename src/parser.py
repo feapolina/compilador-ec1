@@ -1,5 +1,7 @@
 from .ast_nodes import * 
 from .lexer import *
+import traceback
+import sys
 
 #from ast_nodes import * 
 #from lexer import *
@@ -647,7 +649,11 @@ class Parser:
             for line in lines:
                 print(line)
         except Exception as e:
-            print(f"Erro ao imprimir árvore: {e}")
+            tb = e.__traceback__
+            ultimo_frame = traceback.extract_tb(tb)[-1]
+            print(f"""
+                  Erro ao imprimir árvore: {e}\nLocal: {ultimo_frame.filename}\nLinha: {ultimo_frame.line}
+""")
 
     def build_tree_lines(self, node):
         if node is None:
@@ -657,21 +663,47 @@ class Parser:
         if isinstance(node, Programa):
             lines = ["Programa"]
             children_lines = []
-            for decl in node.declaracoes:
-                decl_lines, _, _, _ = self.build_tree_lines(decl)
-                children_lines += ["    " + l for l in decl_lines]
+            for func in node.funcoes:
+                func_lines, _, _, _ = self.build_tree_lines(func)
+                children_lines += ["    " + l for l in func_lines]
             
-            if node.expressaoFinal:
-                exp_lines, _, _, _ = self.build_tree_lines(node.expressaoFinal)
-                children_lines += ["    " + l for l in exp_lines]
+            if node.funcao_main:
+                main_lines, _, _, _ = self.build_tree_lines(node.funcao_main)
+                children_lines += ["    " + l for l in main_lines]
             
             lines += children_lines
+            width = max(len(line) for line in lines)
+            return lines, width, len(lines), width // 2
+        
+        # Suporte para Funcao
+
+        if isinstance(node, Funcao):
+            lines = [f"Funcao {node.nome}"]
+
+            if node.parametros:
+                lines.append("    Parametros:")
+                for p in node.parametros:
+                    lines.append(f"        {p}")
+            
+            if node.corpo:
+                lines.append("    Corpo:")
+                corpo_lines, _, _, _ = self.build_tree_lines(node.corpo)
+                lines += ["        " + l for l in corpo_lines]
+                
             width = max(len(line) for line in lines)
             return lines, width, len(lines), width // 2
 
         # Suporte para Declaracao
         if isinstance(node, Declaracao):
             lines = [f"Declaracao {node.nomeVariavel}"]
+            expr_lines, _, _, _ = self.build_tree_lines(node.expressao)
+            lines += ["    " + l for l in expr_lines]
+            width = max(len(line) for line in lines)
+            return lines, width, len(lines), width // 2
+        
+        # Suporte para Atribuicao
+        if isinstance(node, Atribuicao):
+            lines = [f"Atribuicao {node.nomeVariavel}"]
             expr_lines, _, _, _ = self.build_tree_lines(node.expressao)
             lines += ["    " + l for l in expr_lines]
             width = max(len(line) for line in lines)
@@ -816,7 +848,7 @@ def main():
     parser = Parser()
    
     arquivo = None
-    with open("./tests/test3.cmd", "r") as f:
+    with open("./tests/test4.cmd", "r") as f:
         arquivo = f.read()
 
 

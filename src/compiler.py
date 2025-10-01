@@ -192,7 +192,16 @@ class Compiler:
                 for sub_stmt in stmt.bloco_if.statements:
                     if isinstance(sub_stmt, Declaracao):
                         gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
-                        code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                        if sub_stmt.nomeVariavel in mapa_variaveis:
+                            code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                        else:
+                            code[0] += f"\n    mov %rax, {sub_stmt.nomeVariavel}(%rip)"
+                    elif isinstance(sub_stmt, Atribuicao):
+                        gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                        if sub_stmt.nomeVariavel in mapa_variaveis:
+                            code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                        else:
+                            code[0] += f"\n    mov %rax, {sub_stmt.nomeVariavel}(%rip)"
                     else:
                         gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
                 
@@ -205,6 +214,9 @@ class Compiler:
                 if stmt.bloco_else:
                     for sub_stmt in stmt.bloco_else.statements:
                         if isinstance(sub_stmt, Declaracao):
+                            gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                            code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                        elif isinstance(sub_stmt, Atribuicao):
                             gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
                             code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
                         else:
@@ -225,6 +237,9 @@ class Compiler:
                     if isinstance(sub_stmt, Declaracao):
                         gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
                         code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                    elif isinstance(sub_stmt, Atribuicao):
+                        gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
+                        code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
                     else:
                         gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)
                 
@@ -236,6 +251,9 @@ class Compiler:
                     if isinstance(sub_stmt, Declaracao):
                         gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
                         # Nota: variáveis em blocos aninhados precisariam de escopo separado
+                        code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
+                    elif isinstance(sub_stmt, Atribuicao):
+                        gerar_codigo_expr(sub_stmt.expressao, code, mapa_variaveis, nome_funcao)
                         code[0] += f"\n    mov %rax, {mapa_variaveis[sub_stmt.nomeVariavel]}(%rbp)"
                     else:
                         gerar_codigo_stmt(sub_stmt, code, mapa_variaveis, nome_funcao)

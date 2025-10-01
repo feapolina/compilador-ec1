@@ -144,7 +144,7 @@ class Lexer:
 
 # Teste básico
 if __name__ == "__main__":
-    arquivo_entrada = "tests/test2.cmd"
+    arquivo_entrada = "tests/test4.cmd"
 
     with open(arquivo_entrada, "r") as f:
         conteudo = f.read()
