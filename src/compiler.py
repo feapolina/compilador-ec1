@@ -117,6 +117,13 @@ class Compiler:
                     code[0] += "\n    mov %rbx, %rax"  
                     code[0] += "\n    xor %rdx, %rdx"
                     code[0] += "\n    idiv %rcx"
+                elif op == '%':
+                    code[0] += "\n    mov %rax, %rcx"  
+                    code[0] += "\n    mov %rbx, %rax"  
+                    code[0] += "\n    xor %rdx, %rdx"
+                    code[0] += "\n    idiv %rcx"
+                    code[0] += "\n    mov %rdx, %rax"
+
             
             # ⚠️ ADICIONAR SUPORTE PARA COMPARACAO
             elif isinstance(expr, Comparacao):

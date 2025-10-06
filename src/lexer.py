@@ -90,6 +90,10 @@ class Lexer:
             self.pos += 1
             return Token("Div", "/", self.pos - 1)
         
+        elif c == '%':
+            self.pos += 1
+            return Token("Mod", "%", self.pos - 1)
+        
         elif c == '=':
             self.pos += 1
             if self.pos < self.length and self.texto[self.pos] == "=":

@@ -228,7 +228,7 @@ class Parser:
                 # Parse de termos (fatores com * e /)
                 left, index = parse_factor(index)
                 
-                while index < len(tokens) and tokens[index] in ('*', '/'):
+                while index < len(tokens) and tokens[index] in ('*', '/', '%'):
                     op = tokens[index]
                     index += 1
                     right, index = parse_factor(index)
