@@ -76,11 +76,19 @@ class Lexer:
 
         elif c == '+':
             self.pos += 1
-            return Token("Soma", "+", self.pos - 1)
+            if self.pos < self.length and self.texto[self.pos] == "=":
+                self.pos += 1
+                return Token("MaisIgual", "+=", self.pos - 2)
+            else:
+                return Token("Soma", "+", self.pos - 1)
 
         elif c == '-':
             self.pos += 1
-            return Token("Sub", "-", self.pos - 1)
+            if self.pos < self.length and self.texto[self.pos] == "=":
+                self.pos += 1
+                return Token("MenosIgual", "-=", self.pos - 2)
+            else:
+                return Token("Sub", "-", self.pos - 1)
 
         elif c == '*':
             self.pos += 1
