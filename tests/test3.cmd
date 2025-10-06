@@ -1,20 +1,14 @@
-fun soma(var a, var b) {
-    var resultado = a + b;
-    return resultado;
+fun imcremento_dez(var a){
+var c = 0;
+while (c <= 9){
+	c += 1;
+	a += 1;
 }
-fun subtra(var a, var b) {
-	var resultado = a - b;
-	return resultado
-}
-fun multi(var a, var b) {
-	var resultado = a * b;
-	return resultado
+return a;
 }
 
-fun main() {
-    var x = 5;
-    var y = 10;
-	var z = multi(x, y);
-    return z;
+fun main(){
+var b = 100;
+b = imcremento_dez(b);
+return b;
 }
-

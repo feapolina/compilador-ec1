@@ -3,9 +3,6 @@ from .lexer import *
 import traceback
 import sys
 
-#from ast_nodes import * 
-#from lexer import *
-
 class Parser:
 
     def __init__(self):
@@ -15,7 +12,7 @@ class Parser:
         self.tokens = []
         self.tokenlist = []
     
-    def lexic_analyse(self, text=""): # Deve retornar os tokens
+    def lexic_analyse(self, text=""):
         self.lexer = Lexer(text)
         self.tokens.clear()
         self.tokenlist.clear()
@@ -27,6 +24,7 @@ class Parser:
             print(e)
 
     def semantic_analysis(self, node):
+        # ... (mantenha o código da análise semântica igual) ...
         # Dicionário de funções declaradas: nome -> Funcao
         funcoes_declaradas = {}
         erros = []
@@ -115,13 +113,13 @@ class Parser:
                     # Verificar bloco if (com escopo separado para evitar conflitos)
                     escopo_if = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                     for sub_stmt in stmt.bloco_if.statements:
-                        verificar_statement(sub_stmt, escopo_if)  # Usar escopo_if, não escopo_atual
+                        verificar_statement(sub_stmt, escopo_if)
                     
                     # Verificar bloco else se existir
                     if stmt.bloco_else:
                         escopo_else = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                         for sub_stmt in stmt.bloco_else.statements:
-                            verificar_statement(sub_stmt, escopo_else)  # Usar escopo_else
+                            verificar_statement(sub_stmt, escopo_else)
                 
                 elif isinstance(stmt, While):
                     verificar_expr(stmt.condicao, escopo_atual)
@@ -129,7 +127,7 @@ class Parser:
                     # Verificar bloco while (com escopo separado)
                     escopo_while = {'parent': escopo_atual, 'variaveis': set(), 'parametros': set(), 'funcao_atual': escopo_atual['funcao_atual']}
                     for sub_stmt in stmt.bloco.statements:
-                        verificar_statement(sub_stmt, escopo_while)  # Usar escopo_while
+                        verificar_statement(sub_stmt, escopo_while)
                 
                 elif isinstance(stmt, Bloco):
                     # Bloco cria novo escopo
@@ -137,9 +135,9 @@ class Parser:
                     for sub_stmt in stmt.statements:
                         verificar_statement(sub_stmt, escopo_bloco)
                 
-                # ADICIONAR: Suporte a atribuições simples (sem 'var')
-                elif isinstance(stmt, Declaracao) and not hasattr(stmt, 'tipo'):
-                    # Isso é uma atribuição, não uma declaração
+                # SUPPORT PARA ATRIBUIÇÕES (INCLUINDO += E -=)
+                elif isinstance(stmt, Atribuicao):
+                    # Verificar a expressão
                     verificar_expr(stmt.expressao, escopo_atual)
                     # Verificar se variável existe
                     escopo_temp = escopo_atual
@@ -153,22 +151,9 @@ class Parser:
                 elif isinstance(stmt, ChamadaFuncao):
                     verificar_expr(stmt, escopo_atual)
 
-                elif isinstance(stmt, Atribuicao):
-                    # Verificar a expressão
-                    verificar_expr(stmt.expressao, escopo_atual)
-                    # Verificar se variável existe
-                    escopo_temp = escopo_atual
-                    while escopo_temp:
-                        if stmt.nomeVariavel in escopo_temp['variaveis'] or stmt.nomeVariavel in escopo_temp['parametros']:
-                            break
-                        escopo_temp = escopo_temp['parent']
-                    else:
-                        erros.append(f"Variável '{stmt.nomeVariavel}' não declarada")
-                
                 else:
                     erros.append(f"Tipo de statement não suportado: {type(stmt).__name__}")
-
-            
+                        
             # Verificar corpo da função
             for stmt in funcao.corpo.statements:
                 verificar_statement(stmt, escopo)
@@ -209,9 +194,6 @@ class Parser:
         verificar_funcao(node.funcao_main)
         verificar_funcao_main(node.funcao_main)
         
-        # Verificar se há chamadas a funções não declaradas
-        # (já feito durante a verificação das expressões)
-        
         # Reportar erros
         if erros:
             for erro in erros:
@@ -221,6 +203,15 @@ class Parser:
         print("Análise semântica concluída com sucesso!")
 
     def parse(self, tokens):
+        # Função auxiliar para verificar se um token é identificador
+        def is_identifier(token):
+            return isinstance(token, str) and token.isidentifier()
+        
+        # Função auxiliar para verificar se um token é dígito
+        def is_digit(token):
+            return isinstance(token, str) and (token.isdigit() or 
+                   (token[0] == '-' and token[1:].isdigit() and 
+                    (index == 0 or tokens[index-1] in ('(', '+', '-', '*', '/'))))
         
         def parse_expr(index):
             # Parse de expressões com precedência
@@ -252,7 +243,7 @@ class Parser:
                     return expr, index + 1
                 
                 # Chamada de função
-                elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '(':
+                elif is_identifier(token) and index + 1 < len(tokens) and tokens[index + 1] == '(':
                     nome_funcao = token
                     index += 2  # pular nome e '('
                     argumentos = []
@@ -274,11 +265,11 @@ class Parser:
                     return ChamadaFuncao(nome_funcao, argumentos), index
                 
                 # Variável
-                elif token.isidentifier():
+                elif is_identifier(token):
                     return Var(token), index + 1
                 
                 # Número
-                elif token.isdigit() or (token[0] == '-' and token[1:].isdigit() and (index == 0 or tokens[index-1] in ('(', '+', '-', '*', '/'))):
+                elif is_digit(token):
                     return Number(int(token)), index + 1
                 
                 else:
@@ -313,7 +304,7 @@ class Parser:
                 raise SyntaxError("Esperado 'var' antes da declaração de variável")
             index += 1
             
-            if index >= len(tokens) or not tokens[index].isidentifier():
+            if index >= len(tokens) or not is_identifier(tokens[index]):
                 raise SyntaxError("Esperado identificador após 'var'")
             
             nome = tokens[index]
@@ -354,8 +345,8 @@ class Parser:
                     statements.append(bloco)
                 else:
                     # Expressão simples (atribuição ou chamada de função)
-                    if (index + 1 < len(tokens) and tokens[index].isidentifier() and 
-                        (tokens[index + 1] == '=' or tokens[index + 1] == '(')):
+                    if (index + 1 < len(tokens) and is_identifier(tokens[index]) and 
+                        (tokens[index + 1] in ('=', '+=', '-=') or tokens[index + 1] == '(')):
                         stmt, index = parse_statement(index)
                         statements.append(stmt)
                     else:
@@ -424,17 +415,34 @@ class Parser:
             elif token == 'var':
                 return parse_declaracao_variavel(index)
 
-            # Atribuição de variável (sem 'var')
-            elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '=':
+            # Atribuição de variável (sem 'var') - INCLUINDO += E -=
+            elif (is_identifier(token) and index + 1 < len(tokens) and 
+                tokens[index + 1] in ('=', '+=', '-=')):
                 nome = token
-                index += 2  # pular nome e '='
+                op_atribuicao = tokens[index + 1]
+                index += 2  # pular nome e operador de atribuição
+                
                 expr, index = parse_expr(index)
+                
+                # Para += e -=, transformar em uma operação binária equivalente
+                if op_atribuicao in ('+=', '-='):
+                    # x += y vira x = x + y
+                    # x -= y vira x = x - y
+                    op_binario = op_atribuicao[0]  # '+' ou '-'
+                    var_ref = Var(nome)
+                    expr_binaria = BinOp(var_ref, op_binario, expr)
+                    stmt = Atribuicao(nome, expr_binaria)
+                else:
+                    # Atribuição normal
+                    stmt = Atribuicao(nome, expr)
+                    
                 if index < len(tokens) and tokens[index] == ';':
                     index += 1
-                return Atribuicao(nome, expr), index
+                    
+                return stmt, index
             
             # Chamada de função como statement
-            elif token.isidentifier() and index + 1 < len(tokens) and tokens[index + 1] == '(':
+            elif is_identifier(token) and index + 1 < len(tokens) and tokens[index + 1] == '(':
                 chamada, index = parse_expr(index)  # Reusa parse_expr para chamadas
                 if index < len(tokens) and tokens[index] == ';':
                     index += 1
@@ -461,7 +469,7 @@ class Parser:
                     raise SyntaxError("Esperado 'var' antes do parâmetro")
                 index += 1
                 
-                if index >= len(tokens) or not tokens[index].isidentifier():
+                if index >= len(tokens) or not is_identifier(tokens[index]):
                     raise SyntaxError("Esperado nome do parâmetro após 'var'")
                 
                 parametros.append(tokens[index])
@@ -486,7 +494,7 @@ class Parser:
                 raise SyntaxError("Esperado 'fun' para declaração de função")
             index += 1
             
-            if index >= len(tokens) or not tokens[index].isidentifier():
+            if index >= len(tokens) or not is_identifier(tokens[index]):
                 raise SyntaxError("Esperado nome da função após 'fun'")
             
             nome = tokens[index]
@@ -525,6 +533,7 @@ class Parser:
         
         return Programa(funcoes, funcao_main)
 
+    # ... (mantenha o restante dos métodos igual) ...
     def print_ast(self, node, indent=0, last=False):
         if node is None:
             return
@@ -558,6 +567,7 @@ class Parser:
             print(f"Desconhecido: {type(node)}")
 
     def build_tree_lines(self, node):
+        # ... (mantenha o código de build_tree_lines igual) ...
         if node is None:
             return [""], 0, 1, 0
         
@@ -651,221 +661,4 @@ class Parser:
         except Exception as e:
             tb = e.__traceback__
             ultimo_frame = traceback.extract_tb(tb)[-1]
-            print(f"""
-                  Erro ao imprimir árvore: {e}\nLocal: {ultimo_frame.filename}\nLinha: {ultimo_frame.line}
-""")
-
-    def build_tree_lines(self, node):
-        if node is None:
-            return [""], 0, 1, 0
-        
-        # Suporte para Programa
-        if isinstance(node, Programa):
-            lines = ["Programa"]
-            children_lines = []
-            for func in node.funcoes:
-                func_lines, _, _, _ = self.build_tree_lines(func)
-                children_lines += ["    " + l for l in func_lines]
-            
-            if node.funcao_main:
-                main_lines, _, _, _ = self.build_tree_lines(node.funcao_main)
-                children_lines += ["    " + l for l in main_lines]
-            
-            lines += children_lines
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-        
-        # Suporte para Funcao
-
-        if isinstance(node, Funcao):
-            lines = [f"Funcao {node.nome}"]
-
-            if node.parametros:
-                lines.append("    Parametros:")
-                for p in node.parametros:
-                    lines.append(f"        {p}")
-            
-            if node.corpo:
-                lines.append("    Corpo:")
-                corpo_lines, _, _, _ = self.build_tree_lines(node.corpo)
-                lines += ["        " + l for l in corpo_lines]
-                
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-
-        # Suporte para Declaracao
-        if isinstance(node, Declaracao):
-            lines = [f"Declaracao {node.nomeVariavel}"]
-            expr_lines, _, _, _ = self.build_tree_lines(node.expressao)
-            lines += ["    " + l for l in expr_lines]
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-        
-        # Suporte para Atribuicao
-        if isinstance(node, Atribuicao):
-            lines = [f"Atribuicao {node.nomeVariavel}"]
-            expr_lines, _, _, _ = self.build_tree_lines(node.expressao)
-            lines += ["    " + l for l in expr_lines]
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-
-        # Suporte para If
-        if isinstance(node, If):
-            lines = ["If"]
-            cond_lines, _, _, _ = self.build_tree_lines(node.condicao)
-            lines += ["    Cond: " + l for l in cond_lines]
-            
-            lines.append("    Then:")
-            for stmt in node.bloco_if.statements:
-                stmt_lines, _, _, _ = self.build_tree_lines(stmt)
-                lines += ["        " + l for l in stmt_lines]
-            
-            if node.bloco_else:
-                lines.append("    Else:")
-                for stmt in node.bloco_else.statements:
-                    stmt_lines, _, _, _ = self.build_tree_lines(stmt)
-                    lines += ["        " + l for l in stmt_lines]
-            
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-
-        # Suporte para While
-        if isinstance(node, While):
-            lines = ["While"]
-            cond_lines, _, _, _ = self.build_tree_lines(node.condicao)
-            lines += ["    Cond: " + l for l in cond_lines]
-            
-            lines.append("    Body:")
-            for stmt in node.bloco.statements:
-                stmt_lines, _, _, _ = self.build_tree_lines(stmt)
-                lines += ["        " + l for l in stmt_lines]
-            
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-
-        # Suporte para Return
-        if isinstance(node, Return):
-            lines = ["Return"]
-            expr_lines, _, _, _ = self.build_tree_lines(node.expressao)
-            lines += ["    " + l for l in expr_lines]
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-
-        # Suporte para Bloco
-        if isinstance(node, Bloco):
-            lines = ["Bloco"]
-            for stmt in node.statements:
-                stmt_lines, _, _, _ = self.build_tree_lines(stmt)
-                lines += ["    " + l for l in stmt_lines]
-            width = max(len(line) for line in lines)
-            return lines, width, len(lines), width // 2
-
-        # Suporte para Var
-        if isinstance(node, Var):
-            s = f"Var {node.nomeVariavel}"
-            width = len(s)
-            return [s], width, 1, width // 2
-            
-        if isinstance(node, Number):
-            s = str(node.value)
-            width = len(s)
-            return [s], width, 1, width // 2
-
-        if isinstance(node, BinOp):
-            left_lines, left_width, left_height, left_middle = self.build_tree_lines(node.left)
-            right_lines, right_width, right_height, right_middle = self.build_tree_lines(node.right)
-
-            val_str = str(node.op)
-            val_width = len(val_str)
-
-            # Corrigindo a formatação da árvore
-            first_line = (
-                ' ' * left_middle +
-                ' ' * (left_width - left_middle) +
-                val_str +
-                ' ' * right_middle +
-                ' ' * (right_width - right_middle)
-            )
-
-            second_line = (
-                ' ' * left_middle + '/' +
-                ' ' * (left_width - left_middle - 1 + val_width) + '\\' +
-                ' ' * (right_middle)
-            )
-
-            # Ajustar as linhas para terem a mesma altura
-            height = max(left_height, right_height)
-            left_lines += [' ' * left_width] * (height - left_height)
-            right_lines += [' ' * right_width] * (height - right_height)
-
-            # Combinar as linhas
-            combined = []
-            for i in range(height):
-                left_line = left_lines[i] if i < left_height else ' ' * left_width
-                right_line = right_lines[i] if i < right_height else ' ' * right_width
-                combined.append(left_line + ' ' * val_width + right_line)
-
-            return [first_line, second_line] + combined, left_width + val_width + right_width, height + 2, left_width + val_width // 2
-
-        if isinstance(node, Comparacao):
-            left_lines, left_width, left_height, left_middle = self.build_tree_lines(node.left)
-            right_lines, right_width, right_height, right_middle = self.build_tree_lines(node.right)
-
-            val_str = f"Comp {node.op}"
-            val_width = len(val_str)
-
-            first_line = (
-                ' ' * left_middle +
-                ' ' * (left_width - left_middle) +
-                val_str +
-                ' ' * right_middle +
-                ' ' * (right_width - right_middle)
-            )
-
-            second_line = (
-                ' ' * left_middle + '/' +
-                ' ' * (left_width - left_middle - 1 + val_width) + '\\' +
-                ' ' * (right_middle)
-            )
-
-            height = max(left_height, right_height)
-            left_lines += [' ' * left_width] * (height - left_height)
-            right_lines += [' ' * right_width] * (height - right_height)
-
-            combined = []
-            for i in range(height):
-                left_line = left_lines[i] if i < left_height else ' ' * left_width
-                right_line = right_lines[i] if i < right_height else ' ' * right_width
-                combined.append(left_line + ' ' * val_width + right_line)
-
-            return [first_line, second_line] + combined, left_width + val_width + right_width, height + 2, left_width + val_width // 2
-
-        raise TypeError(f"Tipo de nó não suportado: {type(node).__name__}")
-    
-    # Fim
-
-def main():
-    parser = Parser()
-   
-    arquivo = None
-    with open("./tests/test4.cmd", "r") as f:
-        arquivo = f.read()
-
-
-    parser.lexic_analyse(arquivo)
-   
-    root = parser.parse(parser.tokenlist)
-    
-     # Análise semântica
-    try:
-        parser.semantic_analysis(root)
-        print("Análise semântica concluída sem erros.")
-    except Exception as e:
-        print(e)
-
-    parser.print_ast_tree(root)
-
-
-if __name__ == "__main__":
-    main()
-    input()
+            print(f"Erro ao imprimir árvore: {e}\nLocal: {ultimo_frame.filename}\nLinha: {ultimo_frame.line}")

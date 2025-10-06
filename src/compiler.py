@@ -7,7 +7,7 @@ from .parser import *
 class Compiler:
 
     def __init__(self):
-        self.version = "1.0"
+        self.version = "1.0 - Projeto Final"
         self.code = None
         self.tree = None
         self.label_counter = 0  # Contador para labels únicos
@@ -77,6 +77,17 @@ class Compiler:
                 elif isinstance(stmt, Return):
                     gerar_codigo_expr(stmt.expressao, code, mapa_variaveis, funcao.nome)
                     code[0] += f"\n    jmp {funcao.nome}_fim"
+
+                elif isinstance(stmt, Atribuicao):
+                    # Gerar expressão do lado direito
+                    gerar_codigo_expr(stmt.expressao, code, mapa_variaveis, funcao.nome)
+                    # Armazenar na variável local
+                    # Assumindo que a variável já foi declarada e está no mapa
+                    if stmt.nomeVariavel in mapa_variaveis:
+                        code[0] += f"\n    mov %rax, {mapa_variaveis[stmt.nomeVariavel]}(%rbp)"
+                    else:
+                        # Isso aqui é para variáveis globais/externas, mas pode ser um erro de escopo se chegar aqui
+                        code[0] += f"\n    mov %rax, {stmt.nomeVariavel}(%rip)"
                 
                 else:
                     gerar_codigo_stmt(stmt, code, mapa_variaveis, funcao.nome)
@@ -265,6 +276,7 @@ class Compiler:
         # Contador global de labels
         label_counter = 0
 
+        # Instanciar o Parser
         try:
             self.obj_parser = Parser()
             self.obj_parser.lexic_analyse(self.code)
@@ -273,8 +285,8 @@ class Compiler:
             if self.tree is None:
                 print("Erro: a árvore AST é None")
                 return
-            
             self.obj_parser.semantic_analysis(self.tree)
+        
         except Exception as e:
             raise Exception(f"Erro: {e}")
         
